@@ -1,4 +1,5 @@
-import os
+import os, sys
+from pathlib import Path
 
 import torch
 from torchvision.transforms.functional import to_tensor
@@ -11,7 +12,7 @@ from cutie.utils.get_default_model import get_default_model
 
 @torch.inference_mode()
 @torch.cuda.amp.autocast()
-def main():
+def main(scene):
     # obtain the Cutie model with default parameters -- skipping hydra configuration
     cutie = get_default_model()
     # Typically, use one InferenceCore per video
@@ -20,15 +21,18 @@ def main():
     # you might want to experiment with different sizes, -1 keeps the original size
     processor.max_internal_size = 480
 
-    image_path = './examples/images/bike'
-    # ordering is important
+    # scene = 'bike'
+    project_root = Path(__file__).resolve().parent
+    image_path = project_root / 'examples' / 'images' / scene
+
+    # ordering is importan
     images = sorted(os.listdir(image_path))
 
     # mask for the first frame
     # NOTE: this should be a grayscale mask or a indexed (with/without palette) mask,
     # and definitely NOT a colored RGB image
     # https://pillow.readthedocs.io/en/stable/handbook/concepts.html: mode "L" or "P"
-    mask = Image.open('./examples/masks/bike/00000.png')
+    mask = Image.open(image_path.parent.parent / 'masks' / scene / '00000.png')
     assert mask.mode in ['L', 'P']
 
     # palette is for visualization
@@ -61,7 +65,18 @@ def main():
         # visualize prediction
         mask = Image.fromarray(mask.cpu().numpy().astype(np.uint8))
         mask.putpalette(palette)
-        mask.show()  # or use mask.save(...) to save it somewhere
+
+        basename = image_path.name
+        save_path = project_root / 'output_masks' / basename
+        save_path.mkdir(exist_ok=True)
+        mask.save((save_path / image_name).with_suffix('.png'))
 
 
-main()
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Demonstrate making mask images of a scene.")
+    parser.add_argument("--scene", required=True, help="Scene included in the examples dir.")
+    args = parser.parse_args()
+
+    main(args.scene)
